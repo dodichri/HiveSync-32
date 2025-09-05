@@ -18,6 +18,9 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
+// Optional GFX fonts for style selection
+#include <Fonts/FreeSans9pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 
 // Board variant defines for the Reverse TFT (verified in variant headers)
 #ifndef TFT_CS
@@ -133,13 +136,55 @@ void printHeader() {
   tft.print("HiveSync");
 }
 
-void printLine(int lineIndex1Based, const String &msg, uint16_t color = COLOR_FG) {
-  int16_t y = (lineIndex1Based - 1) * LINE_HEIGHT + 2;
+// Font style selector for printLine
+enum class FontStyle {
+  Default,      // Legacy built-in bitmap font (scaled by TEXT_SIZE)
+  RoundedSans,  // Approximation using FreeSansBold (rounded feel)
+  CleanSans     // Clean sans using FreeSans regular
+};
+
+static inline const GFXfont* fontForStyle(FontStyle style) {
+  switch (style) {
+    case FontStyle::RoundedSans: return &FreeSansBold9pt7b;
+    case FontStyle::CleanSans:   return &FreeSans9pt7b;
+    case FontStyle::Default:
+    default:                     return nullptr; // built-in 5x7 font
+  }
+}
+
+void printLine(int lineIndex1Based, const String &msg, uint16_t color = COLOR_FG, FontStyle style = FontStyle::Default) {
+  const GFXfont* chosen = fontForStyle(style);
+
+  // Compute top of the line band (legacy layout uses top-left origin for default font)
+  int16_t yTop = (lineIndex1Based - 1) * LINE_HEIGHT + 2;
+
   // Clear line background area
-  tft.fillRect(0, y, tft.width(), LINE_HEIGHT, COLOR_BG);
-  tft.setCursor(2, y);
+  tft.fillRect(0, yTop, tft.width(), LINE_HEIGHT, COLOR_BG);
+
   tft.setTextColor(color);
+
+  if (chosen) {
+    // Use GFX font variant; ensure unscaled size
+    tft.setFont(chosen);
+    tft.setTextSize(1);
+
+    // For GFX fonts, cursor Y is the baseline. Anchor near bottom within our band.
+    uint8_t yAdvance = chosen->yAdvance; // typical line height for the font
+    int16_t adv = (int16_t)yAdvance;
+    int16_t baseline = yTop + ((adv - 2 < (LINE_HEIGHT - 2)) ? (adv - 2) : (LINE_HEIGHT - 2));
+    tft.setCursor(2, baseline);
+  } else {
+    // Default legacy font uses top-left as the reference point
+    tft.setFont(nullptr);
+    tft.setTextSize(TEXT_SIZE);
+    tft.setCursor(2, yTop);
+  }
+
   tft.print(msg);
+
+  // Restore legacy defaults to avoid side effects for subsequent draws
+  tft.setFont(nullptr);
+  tft.setTextSize(TEXT_SIZE);
 }
 
 String macNoColonsUpper() {
