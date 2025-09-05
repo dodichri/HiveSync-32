@@ -1,18 +1,71 @@
-#include <Arduino.h>
+// HiveSync modular refactor for Adafruit Feather ESP32-S3 Reverse TFT
+// - BLE Wi-Fi provisioning with POP and device name derived from MAC
+// - UI routines moved to UI module
+// - Provisioning logic encapsulated in Provisioning module
+// - Device info helpers in DeviceInfo module
 
-// put function declarations here:
-int myFunction(int, int);
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Adafruit_ST7789.h> // for ST77XX_* color constants
+
+#include "ui.h"
+#include "provisioning.h"
+#include "device_info.h"
+#include "battery.h"
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  Serial.begin(115200);
+  delay(50);
+
+  // Initialize display and show header
+  UI::init();
+
+  // Initialize battery gauge (if present)
+  if (Battery::begin()) {
+    UI::setBatteryPercent(Battery::percent());
+  } else {
+    UI::setBatteryPercent(-1); // hide if not detected
+  }
+
+  // Derive BLE service name and POP from MAC
+  String serviceName, pop;
+  DeviceInfo::deriveNames(serviceName, pop);
+
+  // Long-press BOOT to clear credentials
+  if (Provisioning::checkResetProvisioningOnBoot()) {
+    UI::clearContentBelowHeader();
+    UI::printLine(2, F("Clearing WiFi credentials..."), ST77XX_YELLOW);
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true, true);
+    delay(200);
+    UI::printLine(3, F("Restarting..."));
+    delay(500);
+    ESP.restart();
+  }
+
+  // Proceed with normal flow
+  UI::clearContentBelowHeader();
+  UI::printHeader();
+  Provisioning::beginIfNeeded(serviceName, pop);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  // Blink LED based on connection state
+  static uint32_t lastBlink = 0;
+  static bool led = false;
+  if (millis() - lastBlink > (Provisioning::isConnected() ? 800 : 250)) {
+    lastBlink = millis();
+    led = !led;
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, led ? HIGH : LOW);
+  }
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  // Periodically update battery percentage and reflect in UI
+  Battery::update();
+  static int lastShown = -2; // force first update
+  int p = Battery::percent();
+  if (p != lastShown) {
+    lastShown = p;
+    UI::setBatteryPercent(p);
+  }
 }
