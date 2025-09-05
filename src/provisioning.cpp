@@ -46,13 +46,13 @@ void onEvent(arduino_event_t *sys_event) {
       break;
 
     case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-      UI::printLine(4, F("WiFi connected"));
+      // Suppress verbose "WiFi connected" text on the display
       break;
 
     case ARDUINO_EVENT_WIFI_STA_GOT_IP: {
       s_connected = true;
       IPAddress ip(sys_event->event_info.got_ip.ip_info.ip.addr);
-      UI::printLine(5, String(F("IP: ")) + ip.toString());
+      // Suppress showing the IP address on the display
       UI::drawWifiIcon(true);
       break;
     }
@@ -113,4 +113,3 @@ void beginIfNeeded(const String &serviceName, const String &pop) {
 }
 
 } // namespace Provisioning
-

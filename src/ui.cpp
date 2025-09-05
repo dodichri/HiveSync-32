@@ -38,6 +38,7 @@ namespace UI {
 static Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
 
 // Colors and layout
+static const uint16_t COLOR_HIVE_YELLOW = 0xFDA0;   // #FFB400 in RGB565
 static const uint16_t COLOR_SIGNAL_BLUE = 0x4C9C;   // #4A90E2 in RGB565
 static const uint16_t COLOR_WHITE_SMOKE = 0xF7BE;   // #F5F5F5 in RGB565
 static const uint16_t COLOR_BG = ST77XX_BLACK;
@@ -45,8 +46,9 @@ static const uint16_t COLOR_FG = COLOR_WHITE_SMOKE;
 static const int TEXT_SIZE = 2;
 static const int LINE_HEIGHT = 8 * TEXT_SIZE + 2; // GFX default font is 6x8
 
-// Cached battery percent for status bar
+// Cached battery percent for status bar and Wi-Fi state
 static int s_battPercent = -1;
+static bool s_wifiConnected = false;
 
 // Fallback simple 16x12 monochrome bitmap (approximation) if FA icon not generated
 static const uint16_t WIFI_ICON_16x12[] PROGMEM = {
@@ -101,21 +103,57 @@ static inline const GFXfont* fontForStyle(FontStyle style) {
 static void drawBatteryTextOnly(int16_t iconX, int16_t iconW);
 
 void drawWifiIcon(bool connected) {
+  // Remember connection state so battery updates can reposition the icon
+  s_wifiConnected = connected;
+
+  // Colors and measurements
   uint16_t iconColor = connected ? COLOR_SIGNAL_BLUE : COLOR_WHITE_SMOKE;
-  int16_t scr_w = tft.width();
+  const int16_t scr_w = tft.width();
+  const int16_t rightMargin = 6;   // margin to right edge
+  const int16_t spacing = 8;       // space between Wi-Fi icon and battery SoC
+  const int16_t textY = 2;         // top margin similar to header text
+  const int16_t charW = 6 * TEXT_SIZE; // default 6x8 font width scaled
+
+  // Determine icon dimensions
 #if __has_include("fa_wifi_icon.h")
   const int16_t iw = FA_WIFI_ICON_WIDTH;
   const int16_t ih = FA_WIFI_ICON_HEIGHT;
-  int16_t x = scr_w - iw - 4;
-  int16_t y = 4;
-  drawMonoBitmap1BPP(x, y, iw, ih, FA_WIFI_ICON_BITMAP, iconColor, COLOR_BG);
 #else
   const int16_t iw = 16, ih = 12;
-  int16_t x = scr_w - iw - 4;
-  int16_t y = 4;
-  drawMonoBitmap16x12(x, y, WIFI_ICON_16x12, iconColor, COLOR_BG);
 #endif
-  drawBatteryTextOnly(x, iw);
+
+  // Compose battery text and compute width
+  String txt;
+  if (s_battPercent >= 0) txt = String(s_battPercent) + '%';
+  const int16_t txtW = txt.length() * charW;
+
+  // Clear a safe region on the right where icon + max text may appear
+  const int16_t maxChars = 4; // up to "100%"
+  const int16_t clearW = iw + spacing + maxChars * charW + rightMargin + 2;
+  const int16_t clearX = scr_w - clearW;
+  tft.fillRect(clearX, 0, clearW, LINE_HEIGHT, COLOR_BG);
+
+  // Layout: Wi-Fi icon BEFORE battery text (left-to-right)
+  // Text is right-aligned to the margin; icon sits to its left.
+  int16_t textX = scr_w - rightMargin - txtW;
+  int16_t iconX = textX - (txtW > 0 ? spacing : 0) - iw;
+
+  // Draw icon
+  const int16_t iconY = -2; // align top with battery SoC text
+#if __has_include("fa_wifi_icon.h")
+  drawMonoBitmap1BPP(iconX, iconY, iw, ih, FA_WIFI_ICON_BITMAP, iconColor, COLOR_BG);
+#else
+  drawMonoBitmap16x12(iconX, iconY, WIFI_ICON_16x12, iconColor, COLOR_BG);
+#endif
+
+  // Draw text (if available)
+  if (txt.length()) {
+    tft.setFont(nullptr);
+    tft.setTextSize(TEXT_SIZE);
+    tft.setTextColor(COLOR_FG);
+    tft.setCursor(textX, textY);
+    tft.print(txt);
+  }
 }
 
 void clearContentBelowHeader() {
@@ -127,7 +165,7 @@ void printHeader() {
   tft.fillScreen(COLOR_BG);
   tft.setTextWrap(false);
   tft.setTextSize(TEXT_SIZE);
-  tft.setTextColor(COLOR_FG);
+  tft.setTextColor(COLOR_HIVE_YELLOW);
   tft.setCursor(2, 2);
   tft.print("HiveSync");
 }
@@ -168,7 +206,7 @@ void init() {
 
   delay(10);
   tft.init(135, 240);      // ST7789 240x135
-  tft.setRotation(1);      // landscape
+  tft.setRotation(3);      // landscape
   printHeader();
   drawWifiIcon(false);
 }
@@ -178,45 +216,12 @@ void setBatteryPercent(int percent) {
   if (percent > 100) percent = 100;
   if (percent == s_battPercent) return; // no change
   s_battPercent = percent;
-  // Draw only the battery text area without touching the Wi-Fi icon
-  int16_t scr_w = tft.width();
-#if __has_include("fa_wifi_icon.h")
-  const int16_t iw = FA_WIFI_ICON_WIDTH;
-#else
-  const int16_t iw = 16;
-#endif
-  int16_t iconX = scr_w - iw - 4;
-  drawBatteryTextOnly(iconX, iw);
+  // Re-draw the Wi-Fi icon and SoC together so spacing/order stay correct
+  drawWifiIcon(s_wifiConnected);
 }
 
-static void drawBatteryTextOnly(int16_t iconX, int16_t iconW) {
-  // Draw battery percentage text to the left of the Wi-Fi icon
-  String txt;
-  if (s_battPercent >= 0) {
-    txt = String(s_battPercent) + '%';
-  } else {
-    txt = F("");
-  }
-
-  int16_t scr_w = tft.width();
-  int16_t charW = 6 * TEXT_SIZE; // default 6x8 font width
-  int16_t txtW = txt.length() * charW;
-  int16_t spacing = 4; // pixels between text and icon
-  int16_t textY = 2;   // top margin similar to header text
-  int16_t textX = scr_w - (/*icon*/ iconW + 4) - spacing - txtW;
-
-  // Clear the area where the text goes (a bit taller than the font)
-  int16_t clearW = (txtW > (charW * 3)) ? txtW : (charW * 3); // clear reasonable area for 0..100%
-  int16_t clearX = scr_w - (iconW + 4) - spacing - clearW;
-  tft.fillRect(clearX, 0, clearW, LINE_HEIGHT, COLOR_BG);
-
-  if (txt.length()) {
-    tft.setFont(nullptr);
-    tft.setTextSize(TEXT_SIZE);
-    tft.setTextColor(COLOR_FG);
-    tft.setCursor(textX, textY);
-    tft.print(txt);
-  }
+static void drawBatteryTextOnly(int16_t, int16_t) {
+  // Deprecated: retained for linkage but not used; drawing now handled in drawWifiIcon().
 }
 
 } // namespace UI
