@@ -1,0 +1,11 @@
+# ESP-IDF Partition Table (TinyUF2 + single large app)
+# Name,   Type, SubType, Offset,   Size,    Flags
+# bootloader.bin,,           0x1000,  32K
+# partition table,           0x8000,   4K
+
+nvs,      data, nvs,        0x9000,   20K,
+otadata,  data, ota,        0xe000,    8K,
+ota_0,    0,    ota_0,      0x10000, 0x2C0000,
+uf2,      app,  factory,    0x2d0000, 256K,
+ffat,     data, fat,        0x310000, 960K,
+

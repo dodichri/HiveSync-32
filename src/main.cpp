@@ -12,6 +12,7 @@
 #include "provisioning.h"
 #include "device_info.h"
 #include "battery.h"
+#include "update_checker.h"
 
 void setup() {
   Serial.begin(115200);
@@ -47,6 +48,9 @@ void setup() {
   UI::clearContentBelowHeader();
   UI::printLine(1, F("HiveSync"));
   Provisioning::beginIfNeeded(serviceName, pop);
+
+  // Start periodic GitHub firmware update checks (logs via Serial)
+  UpdateChecker::begin();
 }
 
 void loop() {
