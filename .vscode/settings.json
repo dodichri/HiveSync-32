@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "atomic": "cpp",
+        "cstddef": "cpp",
+        "string": "cpp",
+        "vector": "cpp",
+        "memory": "cpp",
+        "type_traits": "cpp",
+        "istream": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "tuple": "cpp",
+        "utility": "cpp"
+    }
+}
