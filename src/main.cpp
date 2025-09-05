@@ -50,7 +50,7 @@ void setup() {
 
   // Proceed with normal flow
   UI::clearContentBelowHeader();
-  UI::printLine(1, F("HiveSync"));
+  UI::printHeader();
   Provisioning::beginIfNeeded(serviceName, pop);
 
   // Start periodic GitHub firmware update checks (logs via Serial)
