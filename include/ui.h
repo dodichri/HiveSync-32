@@ -18,6 +18,10 @@ void init();
 // Draw WiFi icon in top-right with state-specific color
 void drawWifiIcon(bool connected);
 
+// Update the battery percent to be shown next to the Wi-Fi icon
+// Pass -1 to hide.
+void setBatteryPercent(int percent);
+
 // Clear everything except the header band
 void clearContentBelowHeader();
 
@@ -29,4 +33,3 @@ void printHeader();
 void printLine(int lineIndex1Based, const String &msg, uint16_t color = 0xF7BE, FontStyle style = FontStyle::Default);
 
 } // namespace UI
-

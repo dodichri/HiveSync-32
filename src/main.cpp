@@ -11,6 +11,7 @@
 #include "ui.h"
 #include "provisioning.h"
 #include "device_info.h"
+#include "battery.h"
 
 void setup() {
   Serial.begin(115200);
@@ -18,6 +19,13 @@ void setup() {
 
   // Initialize display and show header
   UI::init();
+
+  // Initialize battery gauge (if present)
+  if (Battery::begin()) {
+    UI::setBatteryPercent(Battery::percent());
+  } else {
+    UI::setBatteryPercent(-1); // hide if not detected
+  }
 
   // Derive BLE service name and POP from MAC
   String serviceName, pop;
@@ -50,5 +58,14 @@ void loop() {
     led = !led;
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, led ? HIGH : LOW);
+  }
+
+  // Periodically update battery percentage and reflect in UI
+  Battery::update();
+  static int lastShown = -2; // force first update
+  int p = Battery::percent();
+  if (p != lastShown) {
+    lastShown = p;
+    UI::setBatteryPercent(p);
   }
 }

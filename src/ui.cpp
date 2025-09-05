@@ -45,6 +45,9 @@ static const uint16_t COLOR_FG = COLOR_WHITE_SMOKE;
 static const int TEXT_SIZE = 2;
 static const int LINE_HEIGHT = 8 * TEXT_SIZE + 2; // GFX default font is 6x8
 
+// Cached battery percent for status bar
+static int s_battPercent = -1;
+
 // Fallback simple 16x12 monochrome bitmap (approximation) if FA icon not generated
 static const uint16_t WIFI_ICON_16x12[] PROGMEM = {
   0b0000011111100000,
@@ -94,6 +97,9 @@ static inline const GFXfont* fontForStyle(FontStyle style) {
   }
 }
 
+// Forward declaration
+static void drawBatteryTextOnly(int16_t iconX, int16_t iconW);
+
 void drawWifiIcon(bool connected) {
   uint16_t iconColor = connected ? COLOR_SIGNAL_BLUE : COLOR_WHITE_SMOKE;
   int16_t scr_w = tft.width();
@@ -109,6 +115,7 @@ void drawWifiIcon(bool connected) {
   int16_t y = 4;
   drawMonoBitmap16x12(x, y, WIFI_ICON_16x12, iconColor, COLOR_BG);
 #endif
+  drawBatteryTextOnly(x, iw);
 }
 
 void clearContentBelowHeader() {
@@ -166,5 +173,50 @@ void init() {
   drawWifiIcon(false);
 }
 
-} // namespace UI
+void setBatteryPercent(int percent) {
+  if (percent < 0) percent = -1;
+  if (percent > 100) percent = 100;
+  if (percent == s_battPercent) return; // no change
+  s_battPercent = percent;
+  // Draw only the battery text area without touching the Wi-Fi icon
+  int16_t scr_w = tft.width();
+#if __has_include("fa_wifi_icon.h")
+  const int16_t iw = FA_WIFI_ICON_WIDTH;
+#else
+  const int16_t iw = 16;
+#endif
+  int16_t iconX = scr_w - iw - 4;
+  drawBatteryTextOnly(iconX, iw);
+}
 
+static void drawBatteryTextOnly(int16_t iconX, int16_t iconW) {
+  // Draw battery percentage text to the left of the Wi-Fi icon
+  String txt;
+  if (s_battPercent >= 0) {
+    txt = String(s_battPercent) + '%';
+  } else {
+    txt = F("");
+  }
+
+  int16_t scr_w = tft.width();
+  int16_t charW = 6 * TEXT_SIZE; // default 6x8 font width
+  int16_t txtW = txt.length() * charW;
+  int16_t spacing = 4; // pixels between text and icon
+  int16_t textY = 2;   // top margin similar to header text
+  int16_t textX = scr_w - (/*icon*/ iconW + 4) - spacing - txtW;
+
+  // Clear the area where the text goes (a bit taller than the font)
+  int16_t clearW = (txtW > (charW * 3)) ? txtW : (charW * 3); // clear reasonable area for 0..100%
+  int16_t clearX = scr_w - (iconW + 4) - spacing - clearW;
+  tft.fillRect(clearX, 0, clearW, LINE_HEIGHT, COLOR_BG);
+
+  if (txt.length()) {
+    tft.setFont(nullptr);
+    tft.setTextSize(TEXT_SIZE);
+    tft.setTextColor(COLOR_FG);
+    tft.setCursor(textX, textY);
+    tft.print(txt);
+  }
+}
+
+} // namespace UI
