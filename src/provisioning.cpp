@@ -59,7 +59,6 @@ void onEvent(arduino_event_t *sys_event) {
 
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
       s_connected = false;
-      UI::printLine(5, F("WiFi disconnected"), ST77XX_YELLOW);
       UI::drawWifiIcon(false);
       break;
 

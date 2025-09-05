@@ -42,7 +42,6 @@ static const uint16_t COLOR_HIVE_YELLOW = 0xFDA0;   // #FFB400 in RGB565
 static const uint16_t COLOR_SIGNAL_BLUE = 0x4C9C;   // #4A90E2 in RGB565
 static const uint16_t COLOR_WHITE_SMOKE = 0xF7BE;   // #F5F5F5 in RGB565
 static const uint16_t COLOR_BG = ST77XX_BLACK;
-static const uint16_t COLOR_FG = COLOR_WHITE_SMOKE;
 static const int TEXT_SIZE = 2;
 static const int LINE_HEIGHT = 8 * TEXT_SIZE + 2; // GFX default font is 6x8
 
@@ -150,7 +149,7 @@ void drawWifiIcon(bool connected) {
   if (txt.length()) {
     tft.setFont(nullptr);
     tft.setTextSize(TEXT_SIZE);
-    tft.setTextColor(COLOR_FG);
+    tft.setTextColor(COLOR_WHITE_SMOKE);
     tft.setCursor(textX, textY);
     tft.print(txt);
   }
