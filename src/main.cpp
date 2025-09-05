@@ -13,6 +13,7 @@
 #include "device_info.h"
 #include "battery.h"
 #include "update_checker.h"
+#include "version_store.h"
 
 void setup() {
   Serial.begin(115200);
@@ -20,6 +21,9 @@ void setup() {
 
   // Initialize display and show header
   UI::init();
+
+  // Persist current firmware version to NVS (if changed)
+  VersionStore::saveCurrentFwVersion();
 
   // Initialize battery gauge (if present)
   if (Battery::begin()) {

@@ -168,7 +168,7 @@ void init() {
 
   delay(10);
   tft.init(135, 240);      // ST7789 240x135
-  tft.setRotation(1);      // landscape
+  tft.setRotation(3);      // landscape
   printHeader();
   drawWifiIcon(false);
 }

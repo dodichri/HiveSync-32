@@ -27,6 +27,10 @@
 namespace UpdateChecker {
 
 static TaskHandle_t s_task = nullptr;
+static String s_currentVersion = String(FW_VERSION);
+static String s_latestVersion;
+static volatile uint32_t s_lastCheckMs = 0;
+static volatile Status s_status = Status::Unknown;
 
 static String normalizeVersion(const String &v) {
   String out = v;
@@ -118,6 +122,7 @@ static void doCheck() {
 
   if (!owner || !repo || owner[0] == '\0' || repo[0] == '\0') {
     Serial.println(F("[Update] Disabled: GITHUB_OWNER/REPO not set"));
+    s_status = Status::Error;
     return;
   }
 
@@ -132,6 +137,7 @@ static void doCheck() {
 
   if (!http.begin(client, url)) {
     Serial.println(F("[Update] HTTP begin failed"));
+    s_status = Status::Error;
     return;
   }
   http.addHeader("User-Agent", "HiveSync-32");
@@ -141,6 +147,7 @@ static void doCheck() {
     Serial.print(F("[Update] HTTP error: "));
     Serial.println(code);
     http.end();
+    s_status = Status::Error;
     return;
   }
 
@@ -150,6 +157,7 @@ static void doCheck() {
   String latest = jsonExtractString(body, "tag_name");
   if (latest.length() == 0) {
     Serial.println(F("[Update] Failed to parse tag_name"));
+    s_status = Status::Error;
     return;
   }
 
@@ -157,22 +165,27 @@ static void doCheck() {
   String currentNorm = normalizeVersion(String(FW_VERSION));
 
   int cmp = compareSemver(latestNorm, currentNorm);
+  s_latestVersion = latestNorm;
+  s_lastCheckMs = millis();
   if (cmp > 0) {
     Serial.print(F("[Update] New firmware available: v"));
     Serial.print(latestNorm);
     Serial.print(F(" (current v"));
     Serial.print(currentNorm);
     Serial.println(')');
+    s_status = Status::UpdateAvailable;
   } else if (cmp == 0) {
     Serial.print(F("[Update] Up to date (v"));
     Serial.print(currentNorm);
     Serial.println(')');
+    s_status = Status::UpToDate;
   } else {
     Serial.print(F("[Update] Local firmware newer than latest (local v"));
     Serial.print(currentNorm);
     Serial.print(F(", remote v"));
     Serial.print(latestNorm);
     Serial.println(')');
+    s_status = Status::LocalNewer;
   }
 }
 
@@ -204,5 +217,24 @@ void begin() {
   xTaskCreate(task, "UpdateCheck", 8192, nullptr, 1, &s_task);
 }
 
-} // namespace UpdateChecker
+Status status() {
+  return s_status;
+}
 
+String currentVersion() {
+  return s_currentVersion;
+}
+
+String latestVersion() {
+  return s_latestVersion;
+}
+
+bool updateAvailable() {
+  return s_status == Status::UpdateAvailable;
+}
+
+uint32_t lastCheckMillis() {
+  return s_lastCheckMs;
+}
+
+} // namespace UpdateChecker
