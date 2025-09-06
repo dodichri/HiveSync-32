@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiProv.h>
+#include <esp_wifi.h>
 #include <Adafruit_ST7789.h> // for ST77XX_* color constants used in UI calls
 
 #include "ui.h"
@@ -90,17 +91,17 @@ void beginIfNeeded(const String &serviceName, const String &pop) {
   bool hasCreds = existing.length() > 0;
 
   WiFi.onEvent(onEvent);
-  WiFi.mode(WIFI_STA);
+  WiFi.begin();
 
   if (hasCreds) {
     UI::printLine(3, String(F("Connecting to: ")) + existing);
-    WiFi.begin();
   } else {
     uint8_t uuid[16] = {0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf,
                         0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02 };
+
     WiFiProv.beginProvision(
       WIFI_PROV_SCHEME_BLE,
-      WIFI_PROV_SCHEME_HANDLER_FREE_BTDM,
+      WIFI_PROV_SCHEME_HANDLER_FREE_BLE,
       WIFI_PROV_SECURITY_1,
       pop.c_str(),
       serviceName.c_str(),
