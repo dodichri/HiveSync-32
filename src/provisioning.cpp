@@ -25,20 +25,20 @@ void onEvent(arduino_event_t *sys_event) {
   switch (sys_event->event_id) {
     case ARDUINO_EVENT_PROV_START:
       UI::clearContentBelowHeader();
-      UI::printLine(2, String(F("Name: ")) + s_serviceName);
-      UI::printLine(3, String(F("POP:  ")) + s_pop);
+      UI::printLine(3, String(F("Name: ")) + s_serviceName);
+      UI::printLine(4, String(F("POP:  ")) + s_pop);
       break;
 
     case ARDUINO_EVENT_PROV_CRED_RECV:
-      UI::printLine(4, F("Credentials received"));
+      UI::printLine(5, F("Credentials received"));
       break;
 
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
-      UI::printLine(4, F("Provisioning OK"), ST77XX_GREEN);
+      UI::printLine(5, F("Provisioning OK"), ST77XX_GREEN);
       break;
 
     case ARDUINO_EVENT_PROV_CRED_FAIL:
-      UI::printLine(4, F("Provisioning failed"), ST77XX_RED);
+      UI::printLine(5, F("Provisioning failed"), ST77XX_RED);
       break;
 
     case ARDUINO_EVENT_PROV_END:
@@ -93,7 +93,7 @@ void beginIfNeeded(const String &serviceName, const String &pop) {
   WiFi.mode(WIFI_STA);
 
   if (hasCreds) {
-    UI::printLine(2, String(F("Connecting to: ")) + existing);
+    UI::printLine(3, String(F("Connecting to: ")) + existing);
     WiFi.begin();
   } else {
     uint8_t uuid[16] = {0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf,
