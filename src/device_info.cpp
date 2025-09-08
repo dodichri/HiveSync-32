@@ -5,6 +5,9 @@
 
 #include "device_info.h"
 
+#define HS_LOG_PREFIX "INFO"
+#include "debug.h"
+
 namespace DeviceInfo {
 
 String macNoColonsUpper() {
@@ -14,6 +17,7 @@ String macNoColonsUpper() {
   for (size_t i = 0; i < mac.length(); i++) {
     if (mac[i] != ':') out += (char)toupper((int)mac[i]);
   }
+  LOGF("MAC raw: %s, cleaned: %s\n", mac.c_str(), out.c_str());
   return out; // 12 hex chars
 }
 
@@ -26,7 +30,7 @@ void deriveNames(String &serviceNameOut, String &popOut) {
   String last6 = mac.substring(6);
   serviceNameOut = String(F("HiveSync-")) + last4;
   popOut = String(F("Hive-")) + last6;
+  LOGF("ServiceName=%s POP=%s\n", serviceNameOut.c_str(), popOut.c_str());
 }
 
 } // namespace DeviceInfo
-

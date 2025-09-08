@@ -14,9 +14,13 @@
 #include "battery.h"
 #include "updater.h"
 
+#define HS_LOG_PREFIX "MAIN"
+#include "debug.h"
+
 void setup() {
   Serial.begin(115200);
   delay(50);
+  LOGLN("Booting HiveSync");
 
   // Initialize display and show header
   UI::init();
@@ -24,13 +28,16 @@ void setup() {
   // Initialize battery gauge (if present)
   if (Battery::begin()) {
     UI::setBatteryPercent(Battery::percent());
+    LOGF("Battery gauge OK: %d%%\n", Battery::percent());
   } else {
     UI::setBatteryPercent(-1); // hide if not detected
+    LOGLN("Battery gauge not detected");
   }
 
   // Derive BLE service name and POP from MAC
   String serviceName, pop;
   DeviceInfo::deriveNames(serviceName, pop);
+  LOGF("BLE name=%s POP=%s\n", serviceName.c_str(), pop.c_str());
 
   // Long-press BOOT to clear credentials
   if (Provisioning::checkResetProvisioningOnBoot()) {
@@ -48,6 +55,7 @@ void setup() {
   UI::clearContentBelowHeader();
   UI::printHeader();
   Provisioning::beginIfNeeded(serviceName, pop);
+  LOGLN("Provisioning begun (or connecting with stored creds)");
 }
 
 void loop() {

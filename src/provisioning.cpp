@@ -9,6 +9,9 @@
 #include "ui.h"
 #include "provisioning.h"
 
+#define HS_LOG_PREFIX "WIFI"
+#include "debug.h"
+
 // Fallback for BOOT button if not defined by variant
 #ifndef RESET_BUTTON_PIN
 #define RESET_BUTTON_PIN 0
@@ -25,20 +28,24 @@ bool isConnected() { return s_connected; }
 void onEvent(arduino_event_t *sys_event) {
   switch (sys_event->event_id) {
     case ARDUINO_EVENT_PROV_START:
+      LOGLN("Provisioning start");
       UI::clearContentBelowHeader();
       UI::printLine(3, String(F("Name: ")) + s_serviceName);
       UI::printLine(4, String(F("POP:  ")) + s_pop);
       break;
 
     case ARDUINO_EVENT_PROV_CRED_RECV:
+      LOGLN("Credentials received");
       UI::printLine(5, F("Credentials received"));
       break;
 
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
+      LOGLN("Provisioning success");
       UI::printLine(5, F("Provisioning OK"), ST77XX_GREEN);
       break;
 
     case ARDUINO_EVENT_PROV_CRED_FAIL:
+      LOGLN("Provisioning failed");
       UI::printLine(5, F("Provisioning failed"), ST77XX_RED);
       break;
 
@@ -47,11 +54,13 @@ void onEvent(arduino_event_t *sys_event) {
       break;
 
     case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      LOGLN("WiFi STA connected");
       // Suppress verbose "WiFi connected" text on the display
       break;
 
     case ARDUINO_EVENT_WIFI_STA_GOT_IP: {
       s_connected = true;
+      LOGF("Got IP: %s\n", WiFi.localIP().toString().c_str());
       IPAddress ip(sys_event->event_info.got_ip.ip_info.ip.addr);
       // Suppress showing the IP address on the display
       UI::drawWifiIcon(true);
@@ -60,6 +69,7 @@ void onEvent(arduino_event_t *sys_event) {
 
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
       s_connected = false;
+      LOGLN("WiFi STA disconnected");
       UI::drawWifiIcon(false);
       break;
 
@@ -72,12 +82,14 @@ bool checkResetProvisioningOnBoot(uint32_t holdMs) {
   pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
   uint32_t start = millis();
   if (digitalRead(RESET_BUTTON_PIN) == LOW) {
+    LOGLN("BOOT held; checking for long press...");
     while (millis() - start < holdMs) {
       if (digitalRead(RESET_BUTTON_PIN) != LOW) {
         return false; // released early
       }
       delay(10);
     }
+    LOGLN("Long press detected; will clear creds");
     return true; // held long enough
   }
   return false;
@@ -94,8 +106,10 @@ void beginIfNeeded(const String &serviceName, const String &pop) {
   WiFi.begin();
 
   if (hasCreds) {
+    LOGF("Connecting to saved SSID: %s\n", existing.c_str());
     UI::printLine(3, String(F("Connecting to: ")) + existing);
   } else {
+    LOGLN("Starting BLE provisioning");
     uint8_t uuid[16] = {0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf,
                         0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02 };
 

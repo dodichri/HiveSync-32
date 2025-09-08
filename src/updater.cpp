@@ -11,6 +11,9 @@
 #include "provisioning.h"
 #include "updater.h"
 
+#define HS_LOG_PREFIX "OTA"
+#include "debug.h"
+
 // Build-time configuration (can be overridden via platformio.ini build_flags)
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0"
@@ -29,18 +32,7 @@ namespace Updater {
 
 static bool s_checkedThisBoot = false;
 
-// Debug logging control
-#ifndef OTA_DEBUG
-#define OTA_DEBUG 1
-#endif
-
-#if OTA_DEBUG
-#define DBG(fmt, ...) do { Serial.printf("[OTA] " fmt, ##__VA_ARGS__); } while(0)
-#define DBGLN(msg)    do { Serial.println(String("[OTA] ") + (msg)); } while(0)
-#else
-#define DBG(...)      do {} while(0)
-#define DBGLN(...)    do {} while(0)
-#endif
+// Uses global HS_DEBUG flag and module prefix from debug.h
 
 static void logLine(int line, const String &msg, uint16_t color = UI::COLOR_WHITE_SMOKE) {
   UI::printLine(line, msg, color);
@@ -129,9 +121,9 @@ static bool httpsGet(const String &url, String &outBody, int timeoutMs = 15000) 
   client.setInsecure(); // NOTE: for simplicity; consider pinning GitHub cert for production
   HTTPClient http;
   http.setTimeout(timeoutMs);
-  DBG("GET %s\n", url.c_str());
+  LOGF("GET %s\n", url.c_str());
   if (!http.begin(client, url)) {
-    DBGLN("http.begin failed");
+    LOGLN("http.begin failed");
     return false;
   }
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -140,23 +132,23 @@ static bool httpsGet(const String &url, String &outBody, int timeoutMs = 15000) 
   const char* hdrs[] = {"X-RateLimit-Remaining", "X-RateLimit-Used", "X-RateLimit-Reset"};
   http.collectHeaders(hdrs, 3);
   int code = http.GET();
-  DBG("HTTP code: %d\n", code);
+  LOGF("HTTP code: %d\n", code);
   if (http.hasHeader("X-RateLimit-Remaining")) {
-    DBG("RateLimit remaining=%s used=%s reset=%s\n",
+    LOGF("RateLimit remaining=%s used=%s reset=%s\n",
         http.header("X-RateLimit-Remaining").c_str(),
         http.header("X-RateLimit-Used").c_str(),
         http.header("X-RateLimit-Reset").c_str());
   }
   if (code != HTTP_CODE_OK) {
-    DBGLN(String("Error: ") + http.errorToString(code));
+    LOGLN(String("Error: ") + http.errorToString(code));
     // Read body for diagnostics (often JSON with message)
     String errBody = http.getString();
-    if (errBody.length()) DBG("Body: %s\n", errBody.substring(0, 200).c_str());
+    if (errBody.length()) LOGF("Body: %s\n", errBody.substring(0, 200).c_str());
     http.end();
     return false;
   }
   outBody = http.getString();
-  DBG("Body size: %d\n", outBody.length());
+  LOGF("Body size: %d\n", outBody.length());
   http.end();
   return true;
 }
@@ -170,16 +162,16 @@ static bool performOta(const String &url) {
 
   if (!http.begin(client, url)) {
     logLine(4, F("OTA: begin failed"), ST77XX_RED);
-    DBGLN("OTA begin failed");
+    LOGLN("OTA begin failed");
     return false;
   }
 
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   int httpCode = http.GET();
-  DBG("OTA GET code: %d\n", httpCode);
+  LOGF("OTA GET code: %d\n", httpCode);
   if (httpCode != HTTP_CODE_OK) {
     logLine(4, String(F("HTTP ")) + httpCode, ST77XX_RED);
-    DBGLN(String("OTA HTTP error: ") + http.errorToString(httpCode));
+    LOGLN(String("OTA HTTP error: ") + http.errorToString(httpCode));
     http.end();
     return false;
   }
@@ -187,7 +179,7 @@ static bool performOta(const String &url) {
   int contentLen = http.getSize();
   if (contentLen <= 0) {
     logLine(4, F("No Content-Length"), ST77XX_RED);
-    DBGLN("Missing or invalid Content-Length");
+    LOGLN("Missing or invalid Content-Length");
     http.end();
     return false;
   }
@@ -199,26 +191,26 @@ static bool performOta(const String &url) {
     UI::printLine(4, String(F("Updating: ")) + pct + "%", UI::COLOR_DEEP_TEAL);
   });
 
-  DBG("Starting Update: size=%d bytes\n", contentLen);
+  LOGF("Starting Update: size=%d bytes\n", contentLen);
   if (!Update.begin(contentLen)) {
     logLine(4, F("Update.begin failed"), ST77XX_RED);
-    DBGLN(String("Update.begin error: ") + Update.errorString());
+    LOGLN(String("Update.begin error: ") + Update.errorString());
     http.end();
     return false;
   }
 
   WiFiClient * stream = http.getStreamPtr();
   size_t written = Update.writeStream(*stream);
-  DBG("Update.writeStream wrote=%u bytes\n", (unsigned)written);
+  LOGF("Update.writeStream wrote=%u bytes\n", (unsigned)written);
   bool ok = true;
   if (written != (size_t)contentLen) {
     logLine(4, F("Write incomplete"), ST77XX_RED);
-    DBG("Expected %d but wrote %u\n", contentLen, (unsigned)written);
+    LOGF("Expected %d but wrote %u\n", contentLen, (unsigned)written);
     ok = false;
   }
   if (!Update.end()) {
     logLine(4, String(F("End err: ")) + Update.errorString(), ST77XX_RED);
-    DBGLN(String("Update.end error: ") + Update.errorString());
+    LOGLN(String("Update.end error: ") + Update.errorString());
     ok = false;
   }
   http.end();
@@ -240,42 +232,42 @@ static void checkAndUpdateOnce() {
   // Ensure configuration present
   if (String(GITHUB_OWNER).length() == 0 || String(GITHUB_REPO).length() == 0) {
     // Not configured; nothing to do
-    DBGLN("GITHUB_OWNER/REPO not configured; skipping");
+    LOGLN("GITHUB_OWNER/REPO not configured; skipping");
     return;
   }
 
-  DBG("Current version: %s\n", FIRMWARE_VERSION);
-  DBG("WiFi status=%d IP=%s RSSI=%d\n", (int)WiFi.status(), WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
+  LOGF("Current version: %s\n", FIRMWARE_VERSION);
+  LOGF("WiFi status=%d IP=%s RSSI=%d\n", (int)WiFi.status(), WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
 
   String latestJson;
   String apiUrl = String("https://api.github.com/repos/") + GITHUB_OWNER + "/" + GITHUB_REPO + "/releases/latest";
-  DBG("API URL: %s\n", apiUrl.c_str());
+  LOGF("API URL: %s\n", apiUrl.c_str());
   if (!httpsGet(apiUrl, latestJson)) {
-    DBGLN("Latest check failed");
+    LOGLN("Latest check failed");
     return;
   }
 
   String latestTag = jsonFindString(latestJson, String("tag_name"));
   if (latestTag.length() == 0) {
-    DBGLN("JSON missing tag_name; body preview:");
-    DBG("%s\n", latestJson.substring(0, 200).c_str());
+    LOGLN("JSON missing tag_name; body preview:");
+    LOGF("%s\n", latestJson.substring(0, 200).c_str());
     return;
   }
 
   String current = FIRMWARE_VERSION;
   int cmp = compareSemVer(current, latestTag);
-  DBG("Compare: current=%s latest=%s -> %d\n", current.c_str(), latestTag.c_str(), cmp);
+  LOGF("Compare: current=%s latest=%s -> %d\n", current.c_str(), latestTag.c_str(), cmp);
   if (cmp >= 0) {
     return;
   }
 
   String assetUrl = findAssetUrl(latestJson, FIRMWARE_ASSET);
   if (assetUrl.length() == 0) {
-    DBGLN("Could not determine asset URL from JSON");
+    LOGLN("Could not determine asset URL from JSON");
     return;
   }
 
-  DBG("Asset URL: %s\n", assetUrl.c_str());
+  LOGF("Asset URL: %s\n", assetUrl.c_str());
   performOta(assetUrl);
 }
 

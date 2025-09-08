@@ -15,6 +15,9 @@
 
 #include "ui.h"
 
+#define HS_LOG_PREFIX "UI"
+#include "debug.h"
+
 // Board variant fallbacks (verified in Arduino variant headers for Adafruit ESP32-S3 Reverse TFT)
 #ifndef TFT_CS
 #define TFT_CS 42
@@ -159,6 +162,7 @@ void printHeader() {
   tft.setTextColor(COLOR_HIVE_YELLOW);
   tft.setCursor(2, 2);
   tft.print("HiveSync");
+  LOGLN("Header drawn");
 }
 
 void printLine(int lineIndex1Based, const String &msg, uint16_t color, FontStyle style) {
@@ -200,6 +204,7 @@ void init() {
   tft.setRotation(3);      // landscape
   printHeader();
   drawWifiIcon(false);
+  LOGLN("Display initialized (ST7789 240x135, rot=3)");
 }
 
 void setBatteryPercent(int percent) {
@@ -207,6 +212,7 @@ void setBatteryPercent(int percent) {
   if (percent > 100) percent = 100;
   if (percent == s_battPercent) return; // no change
   s_battPercent = percent;
+  if (percent >= 0) LOGF("Battery shown: %d%%\n", percent); else LOGLN("Battery hidden");
   // Re-draw the Wi-Fi icon and SoC together so spacing/order stay correct
   drawWifiIcon(s_wifiConnected);
 }
