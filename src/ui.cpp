@@ -15,6 +15,9 @@
 
 #include "ui.h"
 
+#define HS_LOG_PREFIX "UI"
+#include "debug.h"
+
 // Board variant fallbacks (verified in Arduino variant headers for Adafruit ESP32-S3 Reverse TFT)
 #ifndef TFT_CS
 #define TFT_CS 42
@@ -36,14 +39,6 @@ namespace UI {
 
 // TFT driver instance is module-local
 static Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
-
-// Colors and layout
-static const uint16_t COLOR_HIVE_YELLOW = 0xFDA0;   // #FFB400 in RGB565
-static const uint16_t COLOR_SIGNAL_BLUE = 0x4C9C;   // #4A90E2 in RGB565
-static const uint16_t COLOR_WHITE_SMOKE = 0xF7BE;   // #F5F5F5 in RGB565
-static const uint16_t COLOR_BG = ST77XX_BLACK;
-static const int TEXT_SIZE = 2;
-static const int LINE_HEIGHT = 8 * TEXT_SIZE + 2; // GFX default font is 6x8
 
 // Cached battery percent for status bar and Wi-Fi state
 static int s_battPercent = -1;
@@ -167,6 +162,7 @@ void printHeader() {
   tft.setTextColor(COLOR_HIVE_YELLOW);
   tft.setCursor(2, 2);
   tft.print("HiveSync");
+  LOGLN("Header drawn");
 }
 
 void printLine(int lineIndex1Based, const String &msg, uint16_t color, FontStyle style) {
@@ -208,6 +204,7 @@ void init() {
   tft.setRotation(3);      // landscape
   printHeader();
   drawWifiIcon(false);
+  LOGLN("Display initialized (ST7789 240x135, rot=3)");
 }
 
 void setBatteryPercent(int percent) {
@@ -215,6 +212,7 @@ void setBatteryPercent(int percent) {
   if (percent > 100) percent = 100;
   if (percent == s_battPercent) return; // no change
   s_battPercent = percent;
+  if (percent >= 0) LOGF("Battery shown: %d%%\n", percent); else LOGLN("Battery hidden");
   // Re-draw the Wi-Fi icon and SoC together so spacing/order stay correct
   drawWifiIcon(s_wifiConnected);
 }

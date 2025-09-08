@@ -6,6 +6,9 @@
 
 #include "battery.h"
 
+#define HS_LOG_PREFIX "BATT"
+#include "debug.h"
+
 namespace Battery {
 
 static Adafruit_MAX17048 s_gauge;
@@ -27,6 +30,8 @@ bool begin() {
       s_percent = ip;
     }
   }
+  LOGLN(String("Gauge ") + (s_found ? "found" : "not found"));
+  if (s_found) LOGF("Initial percent=%d\n", s_percent);
   return s_found;
 }
 
@@ -40,7 +45,10 @@ void update() {
   if (!isfinite(p)) return;
   int ip = (int)(p + 0.5f);
   if (ip < 0) ip = 0; if (ip > 100) ip = 100;
-  s_percent = ip;
+  if (ip != s_percent) {
+    s_percent = ip;
+    LOGF("Percent changed -> %d\n", s_percent);
+  }
 }
 
 int percent() {
