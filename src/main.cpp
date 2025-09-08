@@ -12,6 +12,7 @@
 #include "provisioning.h"
 #include "device_info.h"
 #include "battery.h"
+#include "updater.h"
 
 void setup() {
   Serial.begin(115200);
@@ -68,4 +69,7 @@ void loop() {
     lastShown = p;
     UI::setBatteryPercent(p);
   }
+
+  // After Wi-Fi connects, perform a one-time OTA check
+  Updater::loop();
 }

@@ -37,15 +37,6 @@ namespace UI {
 // TFT driver instance is module-local
 static Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
 
-// Colors and layout
-static const uint16_t COLOR_HIVE_YELLOW = 0xFDA0;   // #FFB400 in RGB565
-static const uint16_t COLOR_SIGNAL_BLUE = 0x4C9C;   // #4A90E2 in RGB565
-static const uint16_t COLOR_WHITE_SMOKE = 0xF7BE;   // #F5F5F5 in RGB565
-static const uint16_t COLOR_DEEP_TEAL   = 0x03F2;   // #007C91 in RGB565
-static const uint16_t COLOR_BG = ST77XX_BLACK;
-static const int TEXT_SIZE = 2;
-static const int LINE_HEIGHT = 8 * TEXT_SIZE + 2; // GFX default font is 6x8
-
 // Cached battery percent for status bar and Wi-Fi state
 static int s_battPercent = -1;
 static bool s_wifiConnected = false;
