@@ -11,5 +11,8 @@ void loop();
 // Expose the current firmware version string (from build flag) for display/logs.
 const char* currentVersion();
 
-} // namespace Updater
+// True once the firmware check/update process has completed (this boot).
+// Useful for sequencing other subsystems after OTA check.
+bool checkCompleted();
 
+} // namespace Updater

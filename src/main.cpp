@@ -13,6 +13,7 @@
 #include "device_info.h"
 #include "battery.h"
 #include "updater.h"
+#include "sensors.h"
 
 #define HS_LOG_PREFIX "MAIN"
 #include "debug.h"
@@ -56,6 +57,8 @@ void setup() {
   UI::printHeader();
   Provisioning::beginIfNeeded(serviceName, pop);
   LOGLN("Provisioning begun (or connecting with stored creds)");
+
+  // Delay sensor initialization until WiFi connected and OTA check completes
 }
 
 void loop() {
@@ -80,4 +83,27 @@ void loop() {
 
   // After Wi-Fi connects, perform a one-time OTA check
   Updater::loop();
+
+  // Initialize sensors once after OTA check completes, then sample periodically
+  static bool sensorsStarted = false;
+  if (!sensorsStarted && Provisioning::isConnected() && Updater::checkCompleted()) {
+    LOGLN("Starting sensors after OTA check complete");
+    Sensors::begin();
+    sensorsStarted = true;
+  }
+  if (sensorsStarted) {
+    Sensors::loop();
+    // Show latest temperature on line 3 in deep teal when updated
+    static uint32_t lastTempShownAt = 0;
+    uint32_t sampleAt = Sensors::lastSampleMillis();
+    if (Sensors::ds18b20Available() && sampleAt != 0 && sampleAt != lastTempShownAt) {
+      float tC = Sensors::ds18b20LastTempC();
+      if (isfinite(tC)) {
+        char buf[24];
+        snprintf(buf, sizeof(buf), "Temp: %.1f C", tC);
+        UI::printLine(3, String(buf), UI::COLOR_DEEP_TEAL);
+        lastTempShownAt = sampleAt;
+      }
+    }
+  }
 }

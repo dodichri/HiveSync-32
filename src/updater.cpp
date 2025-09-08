@@ -31,6 +31,7 @@
 namespace Updater {
 
 static bool s_checkedThisBoot = false;
+static bool s_checkCompleted = false;
 
 // Uses global HS_DEBUG flag and module prefix from debug.h
 
@@ -228,11 +229,13 @@ static bool performOta(const String &url) {
 static void checkAndUpdateOnce() {
   if (s_checkedThisBoot) return;
   s_checkedThisBoot = true;
+  s_checkCompleted = false;
 
   // Ensure configuration present
   if (String(GITHUB_OWNER).length() == 0 || String(GITHUB_REPO).length() == 0) {
     // Not configured; nothing to do
     LOGLN("GITHUB_OWNER/REPO not configured; skipping");
+    s_checkCompleted = true;
     return;
   }
 
@@ -244,6 +247,7 @@ static void checkAndUpdateOnce() {
   LOGF("API URL: %s\n", apiUrl.c_str());
   if (!httpsGet(apiUrl, latestJson)) {
     LOGLN("Latest check failed");
+    s_checkCompleted = true;
     return;
   }
 
@@ -251,6 +255,7 @@ static void checkAndUpdateOnce() {
   if (latestTag.length() == 0) {
     LOGLN("JSON missing tag_name; body preview:");
     LOGF("%s\n", latestJson.substring(0, 200).c_str());
+    s_checkCompleted = true;
     return;
   }
 
@@ -258,23 +263,30 @@ static void checkAndUpdateOnce() {
   int cmp = compareSemVer(current, latestTag);
   LOGF("Compare: current=%s latest=%s -> %d\n", current.c_str(), latestTag.c_str(), cmp);
   if (cmp >= 0) {
+    s_checkCompleted = true;
     return;
   }
 
   String assetUrl = findAssetUrl(latestJson, FIRMWARE_ASSET);
   if (assetUrl.length() == 0) {
     LOGLN("Could not determine asset URL from JSON");
+    s_checkCompleted = true;
     return;
   }
 
   LOGF("Asset URL: %s\n", assetUrl.c_str());
   performOta(assetUrl);
+  s_checkCompleted = true;
 }
 
 void loop() {
   // Only proceed if WiFi is connected
   if (!Provisioning::isConnected()) return;
   checkAndUpdateOnce();
+}
+
+bool checkCompleted() {
+  return s_checkCompleted;
 }
 
 } // namespace Updater
