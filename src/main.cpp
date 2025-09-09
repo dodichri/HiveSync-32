@@ -13,6 +13,7 @@
 #include "battery.h"
 #include "updater.h"
 #include "sensors.h"
+#include "beep_client.h"
 
 #define HS_LOG_PREFIX "MAIN"
 #include "debug.h"
@@ -115,6 +116,24 @@ void setup() {
       char buf[32];
       snprintf(buf, sizeof(buf), "DS18B20: %.1f C", tC);
       UI::printLine(3, String(buf), UI::COLOR_DEEP_TEAL);
+
+      // Attempt single-call upload to Beep API if Wi-Fi and config present
+      if (Provisioning::isConnected() && BeepClient::isConfigured()) {
+        UI::printLine(4, F("Uploading to BEEP..."), ST77XX_YELLOW);
+        BeepClient::KV kvs[] = { { "t_i", tC } };
+        String err;
+        bool ok = BeepClient::uploadReadings(kvs, 1, Sensors::lastSampleMillis(), err);
+        if (ok) {
+          UI::printLine(4, F("BEEP upload OK"), ST77XX_GREEN);
+        } else {
+          UI::printLine(4, String(F("BEEP upload failed")), ST77XX_RED);
+          LOGF("Beep upload error: %s\n", err.c_str());
+        }
+      } else if (!BeepClient::isConfigured()) {
+        UI::printLine(4, F("BEEP not configured"), ST77XX_YELLOW);
+      } else {
+        UI::printLine(4, F("No WiFi; skip upload"), ST77XX_YELLOW);
+      }
     } else {
       UI::printLine(3, F("DS18B20: no valid reading"), ST77XX_RED);
     }

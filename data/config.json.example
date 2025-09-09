@@ -1,0 +1,7 @@
+{
+  "beep_email": "you@example.com",
+  "beep_password": "your_password",
+  "beep_device_key": "your_beep_device_key",
+  "beep_base_url": "https://api.beep.nl"
+}
+
