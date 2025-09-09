@@ -1,0 +1,22 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - run: pip install platformio
+      - run: pio run -e adafruit_feather_esp32s3_reversetft
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: .pio/build/adafruit_feather_esp32s3_reversetft/firmware.bin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
