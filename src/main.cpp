@@ -19,13 +19,11 @@
 
 void setup() {
   Serial.begin(115200);
-    uint32_t _start = millis();
-    while (!Serial && (millis() - _start) < 5000) {
-      delay(10);
-    }
-  delay(50);
-  LOGLN("Booting HiveSync (single-shot)");
-
+  while(!Serial) {
+    delay(50); // wait for serial port to connect. Needed for native USB
+  }
+  
+  LOGLN("Booting HiveSync");
   // Initialize display and show header
   UI::init();
 
