@@ -43,11 +43,12 @@ jobs:
           p = pathlib.Path('platformio.ini')
           s = p.read_text(encoding='utf-8')
           version = os.environ['VERSION']
-          # Replace -D FIRMWARE_VERSION=\"...\" while preserving escaping
-          s2, n = re.subn(r'(-D\s*FIRMWARE_VERSION=\\\")(.*?)(\\\")', rf'\1{version}\3', s)
+          # Replace value between the escaped quotes, preserving backslashes/quotes
+          pat = re.compile(r'(-D\s*FIRMWARE_VERSION\s*=\s*\\+\")(.*?)(\\+\")')
+          s2, n = pat.subn(lambda m: m.group(1) + version + m.group(3), s)
           if n == 0:
-            print('FIRMWARE_VERSION define not found in platformio.ini', file=sys.stderr)
-            sys.exit(1)
+              print('FIRMWARE_VERSION define not found in platformio.ini', file=sys.stderr)
+              sys.exit(1)
           p.write_text(s2, encoding='utf-8')
           print(f'Updated FIRMWARE_VERSION to {version}')
           PY
