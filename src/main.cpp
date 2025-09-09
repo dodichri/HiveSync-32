@@ -1,6 +1,6 @@
 // HiveSync single-shot sampling with deep sleep
 // - Take a sensor reading, show briefly, then deep sleep
-// - Wakes every HS_SENSOR_SAMPLE_INTERVAL_MS (default 15 minutes)
+// - Wakes every sample_interval_ms from config.json (default 15 minutes)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -13,6 +13,7 @@
 #include "battery.h"
 #include "updater.h"
 #include "sensors.h"
+#include "config.h"
 
 #define HS_LOG_PREFIX "MAIN"
 #include "debug.h"
@@ -26,6 +27,13 @@ void setup() {
   LOGLN("Booting HiveSync");
   // Initialize display and show header
   UI::init();
+
+  // Load configuration from LittleFS (creates defaults if missing)
+  if (!Config::begin()) {
+    UI::printLine(2, F("Config load failed"), ST77XX_RED);
+  } else {
+    Config::dumpToLog();
+  }
 
   // Initialize battery gauge (if present)
   if (Battery::begin()) {
@@ -129,13 +137,11 @@ void setup() {
   UI::powerDown();
 
   // Prepare deep sleep for the configured interval (ms -> us)
-#ifndef HS_SENSOR_SAMPLE_INTERVAL_MS
-#define HS_SENSOR_SAMPLE_INTERVAL_MS 900000UL
-#endif
-  const uint64_t sleepUs = (uint64_t)HS_SENSOR_SAMPLE_INTERVAL_MS * 1000ULL;
+  const unsigned long intervalMs = Config::sampleIntervalMs();
+  const uint64_t sleepUs = (uint64_t)intervalMs * 1000ULL;
   LOGF("Deep sleep for %lu ms (%.1f min)\n",
-       (unsigned long)HS_SENSOR_SAMPLE_INTERVAL_MS,
-       (double)HS_SENSOR_SAMPLE_INTERVAL_MS / 60000.0);
+       (unsigned long)intervalMs,
+       (double)intervalMs / 60000.0);
   esp_sleep_enable_timer_wakeup(sleepUs);
   esp_deep_sleep_start();
 }
