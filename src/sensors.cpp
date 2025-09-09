@@ -19,8 +19,11 @@
 #if HS_SENSOR_DS18B20_PIN >= 0
   #include <OneWire.h>
   #include <DallasTemperature.h>
-  static OneWire* s_oneWire = nullptr;
-  static DallasTemperature* s_dt = nullptr;
+  // Prefer static objects over dynamic allocation to reduce code size and heap use
+  static OneWire s_oneWire_obj(HS_SENSOR_DS18B20_PIN);
+  static DallasTemperature s_dt_obj(&s_oneWire_obj);
+  static OneWire* s_oneWire = &s_oneWire_obj;
+  static DallasTemperature* s_dt = &s_dt_obj;
   static DeviceAddress s_addr = {0};
   static bool s_dtFound = false;
 
@@ -52,11 +55,9 @@ namespace Sensors {
 void begin() {
 #if HS_SENSOR_DS18B20_PIN >= 0
   LOGF("Sensors.begin: DS18B20 enabled on GPIO %d, interval=%lu ms (~%.1f min)\n",
-       HS_SENSOR_DS18B20_PIN,
-       (unsigned long)HS_SENSOR_SAMPLE_INTERVAL_MS,
-       (double)HS_SENSOR_SAMPLE_INTERVAL_MS / 60000.0);
-  s_oneWire = new OneWire(HS_SENSOR_DS18B20_PIN);
-  s_dt = new DallasTemperature(s_oneWire);
+        HS_SENSOR_DS18B20_PIN,
+        (unsigned long)HS_SENSOR_SAMPLE_INTERVAL_MS,
+        (double)HS_SENSOR_SAMPLE_INTERVAL_MS / 60000.0);
   s_dt->begin();
 
   uint8_t count = s_dt->getDeviceCount();

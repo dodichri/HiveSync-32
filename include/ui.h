@@ -41,6 +41,9 @@ void printHeader();
 // Default color is 0xF7BE (White Smoke) to match existing style
 void printLine(int lineIndex1Based, const String &msg, uint16_t color = 0xF7BE, FontStyle style = FontStyle::Default);
 
+// Overload for flash-resident literals: UI::printLine(3, F("text"))
+void printLine(int lineIndex1Based, const __FlashStringHelper* msg, uint16_t color = 0xF7BE, FontStyle style = FontStyle::Default);
+
 // Turn off backlight and I2C/display power rails to save energy before deep sleep
 void powerDown();
 

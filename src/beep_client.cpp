@@ -10,6 +10,7 @@
 #include <ctype.h>
 
 #include "beep_client.h"
+#include "json_utils.h"
 #include "provisioning.h"
 
 #define HS_LOG_PREFIX "BEEP"
@@ -24,20 +25,7 @@ static String s_apiToken; // cached during current boot
 static bool   s_cfgLoaded = false;
 static String s_email, s_password, s_deviceKey, s_baseUrl;
 
-// Minimal JSON string value finder: finds "key":"value" and returns value
-static String jsonFindString(const String &body, const String &key, int from = 0) {
-  String needle = String("\"") + key + "\":";
-  int k = body.indexOf(needle, from);
-  if (k == -1) return String();
-  // allow optional spaces after ':'
-  int pos = k + needle.length();
-  while (pos < (int)body.length() && (body[pos] == ' ')) pos++;
-  if (pos >= (int)body.length() || body[pos] != '"') return String();
-  int q1 = pos;
-  int q2 = body.indexOf('"', q1 + 1);
-  if (q2 == -1) return String();
-  return body.substring(q1 + 1, q2);
-}
+// jsonFindString now provided by json_utils.cpp
 
 static bool ensureConfigLoaded() {
   if (s_cfgLoaded) return true;
@@ -182,9 +170,8 @@ static bool ensureLoggedIn(String &err) {
 static bool sendJsonAuth(const char* method, const String &url, const String &payload, String &outBody, int &outCode, String &err, int timeoutMs = 15000) {
   if (!ensureLoggedIn(err)) return false;
   if (!httpsSendJson(method, url, payload, outBody, outCode, s_apiToken, timeoutMs)) {
-    if (String(method) == "POST") err = F("HTTP error during POST");
-    else if (String(method) == "PATCH") err = F("HTTP error during PATCH");
-    else err = F("HTTP error during request");
+    // Keep message small; avoid String(method) comparisons
+    err = F("HTTP error");
     return false;
   }
   return true;
@@ -316,20 +303,13 @@ bool updateFirmwareVersion(const char* version, String &err) {
     return false;
   }
 
-  // 2) Attempt to PATCH firmware version (try a few common field names)
+  // 2) PATCH firmware version using a single canonical field to reduce code size
   String devUrl = (s_baseUrl.length() ? s_baseUrl : String(kDefaultBeepBaseUrl)) + "/api/devices/" + String(devId);
-  const char* fields[] = { "firmware_version", "fw_version", "firmware" };
-  for (size_t i = 0; i < sizeof(fields)/sizeof(fields[0]); ++i) {
-    String payload = String("{") + "\"" + fields[i] + "\":\"" + version + "\"}";
-    String rbody; int rcode = 0; String reqErr;
-    if (!sendJsonAuth("PATCH", devUrl, payload, rbody, rcode, reqErr)) {
-      // try next field name
-      continue;
-    }
-    if (rcode >= 200 && rcode < 300) {
-      LOGLN("Firmware version updated on BEEP");
-      return true;
-    }
+  String payload = String("{\"firmware_version\":\"") + version + "\"}";
+  String rbody; int rcode = 0; String reqErr;
+  if (sendJsonAuth("PATCH", devUrl, payload, rbody, rcode, reqErr) && (rcode >= 200 && rcode < 300)) {
+    LOGLN("Firmware version updated on BEEP");
+    return true;
   }
   err = F("Device update failed");
   return false;

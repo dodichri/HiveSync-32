@@ -125,8 +125,16 @@ void setup() {
   if (Sensors::ds18b20Available()) {
     float tC = Sensors::ds18b20LastTempC();
     if (isfinite(tC)) {
+      // Avoid printf float to reduce firmware size
+      char num[12];
+      dtostrf(tC, 0, 1, num);
       char buf[32];
-      snprintf(buf, sizeof(buf), "DS18B20: %.1f C", tC);
+      char* p = buf;
+      const char prefix[] = "DS18B20: ";
+      memcpy(p, prefix, sizeof(prefix) - 1); p += sizeof(prefix) - 1;
+      size_t nlen = strlen(num);
+      memcpy(p, num, nlen); p += nlen;
+      *p++ = ' '; *p++ = 'C'; *p = '\0';
       UI::printLine(3, String(buf), UI::COLOR_DEEP_TEAL);
 
       // Attempt single-call upload to Beep API if Wi-Fi and config present

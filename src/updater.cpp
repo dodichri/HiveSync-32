@@ -10,6 +10,7 @@
 #include "ui.h"
 #include "provisioning.h"
 #include "updater.h"
+#include "json_utils.h"
 
 #define HS_LOG_PREFIX "OTA"
 #include "debug.h"
@@ -76,18 +77,7 @@ static int compareSemVer(const String &a, const String &b) {
   return 0;
 }
 
-// Very lightweight JSON scraping (avoid extra lib deps): find value for a key
-// Ex: key "tag_name" -> returns the unescaped string value without quotes.
-static String jsonFindString(const String &body, const String &key, int from = 0) {
-  String needle = String("\"") + key + "\":";
-  int k = body.indexOf(needle, from);
-  if (k == -1) return String();
-  int q1 = body.indexOf('"', k + needle.length());
-  if (q1 == -1) return String();
-  int q2 = body.indexOf('"', q1 + 1);
-  if (q2 == -1) return String();
-  return body.substring(q1 + 1, q2);
-}
+// jsonFindString now provided by json_utils.cpp
 
 // Attempt to find a browser_download_url for the configured asset name.
 static String findAssetUrl(const String &json, const String &assetName) {

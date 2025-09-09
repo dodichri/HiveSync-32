@@ -6,8 +6,6 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
-#include <Fonts/FreeSans9pt7b.h>
-#include <Fonts/FreeSansBold9pt7b.h>
 
 #if __has_include("fa_wifi_icon.h")
 #include "fa_wifi_icon.h"
@@ -84,13 +82,10 @@ static void drawMonoBitmap16x12(int16_t x, int16_t y, const uint16_t *data, uint
   }
 }
 
-static inline const GFXfont* fontForStyle(FontStyle style) {
-  switch (style) {
-    case FontStyle::RoundedSans: return &FreeSansBold9pt7b;
-    case FontStyle::CleanSans:   return &FreeSans9pt7b;
-    case FontStyle::Default:
-    default:                     return nullptr; // built-in font
-  }
+static inline const GFXfont* fontForStyle(FontStyle /*style*/) {
+  // Extra fonts removed to reduce firmware size; use built-in font.
+  // Keeping function for API stability.
+  return nullptr;
 }
 
 // Forward declaration
@@ -166,6 +161,34 @@ void printHeader() {
 }
 
 void printLine(int lineIndex1Based, const String &msg, uint16_t color, FontStyle style) {
+  const GFXfont* chosen = fontForStyle(style);
+
+  int16_t yTop = (lineIndex1Based - 1) * LINE_HEIGHT + 2;
+  tft.fillRect(0, yTop, tft.width(), LINE_HEIGHT, COLOR_BG);
+  tft.setTextColor(color);
+
+  if (chosen) {
+    tft.setFont(chosen);
+    tft.setTextSize(1);
+    uint8_t yAdvance = chosen->yAdvance;
+    int16_t adv = (int16_t)yAdvance;
+    int16_t baseline = yTop + ((adv - 2 < (LINE_HEIGHT - 2)) ? (adv - 2) : (LINE_HEIGHT - 2));
+    tft.setCursor(2, baseline);
+  } else {
+    tft.setFont(nullptr);
+    tft.setTextSize(TEXT_SIZE);
+    tft.setCursor(2, yTop);
+  }
+
+  tft.print(msg);
+
+  // Restore defaults
+  tft.setFont(nullptr);
+  tft.setTextSize(TEXT_SIZE);
+}
+
+// Overload that accepts flash-resident strings via F("...") to avoid RAM/String
+void printLine(int lineIndex1Based, const __FlashStringHelper* msg, uint16_t color, FontStyle style) {
   const GFXfont* chosen = fontForStyle(style);
 
   int16_t yTop = (lineIndex1Based - 1) * LINE_HEIGHT + 2;
