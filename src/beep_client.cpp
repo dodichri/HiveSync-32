@@ -7,6 +7,7 @@
 #include <FS.h>
 #include <LittleFS.h>
 #include <time.h>
+#include <ctype.h>
 
 #include "beep_client.h"
 #include "provisioning.h"
@@ -81,14 +82,42 @@ bool isConfigured() {
   return ensureConfigLoaded();
 }
 
-static bool httpsPostJson(const String &url, const String &payload, String &outBody, int &outCode, const String &bearer = String(), int timeoutMs = 15000) {
+// (removed httpsPostJson in favor of httpsSendJson)
+
+static bool httpsGet(const String &url, String &outBody, int &outCode, const String &bearer = String(), int timeoutMs = 15000) {
   outBody = String();
   outCode = 0;
   WiFiClientSecure client;
-  client.setInsecure(); // simplify TLS (consider cert pinning for production)
+  client.setInsecure();
   HTTPClient http;
   http.setTimeout(timeoutMs);
-  LOGF("POST %s\n", url.c_str());
+  LOGF("GET %s\n", url.c_str());
+  if (!http.begin(client, url)) {
+    LOGLN("http.begin failed");
+    return false;
+  }
+  http.addHeader("Accept", "application/json");
+  if (bearer.length()) {
+    http.addHeader("Authorization", String("Bearer ") + bearer);
+  }
+  outCode = http.GET();
+  LOGF("HTTP %d\n", outCode);
+  outBody = http.getString();
+  if (outBody.length()) {
+    LOGF("Body(%d): %s\n", outBody.length(), outBody.substring(0, 200).c_str());
+  }
+  http.end();
+  return (outCode > 0);
+}
+
+static bool httpsSendJson(const String &method, const String &url, const String &payload, String &outBody, int &outCode, const String &bearer = String(), int timeoutMs = 15000) {
+  outBody = String();
+  outCode = 0;
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(timeoutMs);
+  LOGF("%s %s\n", method.c_str(), url.c_str());
   if (!http.begin(client, url)) {
     LOGLN("http.begin failed");
     return false;
@@ -98,7 +127,7 @@ static bool httpsPostJson(const String &url, const String &payload, String &outB
   if (bearer.length()) {
     http.addHeader("Authorization", String("Bearer ") + bearer);
   }
-  outCode = http.POST(payload);
+  outCode = http.sendRequest(method.c_str(), (uint8_t*)payload.c_str(), payload.length());
   LOGF("HTTP %d\n", outCode);
   outBody = http.getString();
   if (outBody.length()) {
@@ -121,7 +150,7 @@ static bool login(String &tokenOut, String &err) {
                    "\"password\":\"" + s_password + "\"}";
 
   String body; int code = 0;
-  if (!httpsPostJson(url, payload, body, code)) {
+  if (!httpsSendJson("POST", url, payload, body, code)) {
     err = F("HTTP error during login");
     return false;
   }
@@ -136,6 +165,28 @@ static bool login(String &tokenOut, String &err) {
     return false;
   }
   tokenOut = token;
+  return true;
+}
+
+// Ensure we have an API token cached (logs in if needed)
+static bool ensureLoggedIn(String &err) {
+  if (s_apiToken.length()) return true;
+  String tok; String lerr;
+  if (!login(tok, lerr)) { err = lerr.length() ? lerr : String(F("Login failed")); return false; }
+  s_apiToken = tok;
+  LOGLN("Login OK; token cached");
+  return true;
+}
+
+// Authenticated JSON request helper that ensures login and attaches Bearer token
+static bool sendJsonAuth(const char* method, const String &url, const String &payload, String &outBody, int &outCode, String &err, int timeoutMs = 15000) {
+  if (!ensureLoggedIn(err)) return false;
+  if (!httpsSendJson(method, url, payload, outBody, outCode, s_apiToken, timeoutMs)) {
+    if (String(method) == "POST") err = F("HTTP error during POST");
+    else if (String(method) == "PATCH") err = F("HTTP error during PATCH");
+    else err = F("HTTP error during request");
+    return false;
+  }
   return true;
 }
 
@@ -164,14 +215,7 @@ bool uploadReadings(const KV* items, size_t count, uint32_t sampleMillis, String
   }
   if (!Provisioning::isConnected()) { err = F("WiFi not connected"); return false; }
   if (!ensureConfigLoaded()) { err = F("BEEP config missing"); return false; }
-
-  // Obtain token once per boot
-  if (!s_apiToken.length()) {
-    String tok; String lerr;
-    if (!login(tok, lerr)) { err = lerr; return false; }
-    s_apiToken = tok;
-    LOGLN("Login OK; token cached");
-  }
+  if (!ensureLoggedIn(err)) { return false; }
 
   // Sync time; compute reading epoch = now - elapsed since sample
   uint32_t nowMs = millis();
@@ -205,8 +249,7 @@ bool uploadReadings(const KV* items, size_t count, uint32_t sampleMillis, String
 
   String url = (s_baseUrl.length() ? s_baseUrl : String(kDefaultBeepBaseUrl)) + "/api/sensors";
   String body; int code = 0;
-  if (!httpsPostJson(url, payload, body, code, s_apiToken)) {
-    err = F("HTTP error during upload");
+  if (!sendJsonAuth("POST", url, payload, body, code, err)) {
     return false;
   }
   if (code < 200 || code >= 300) {
@@ -215,6 +258,81 @@ bool uploadReadings(const KV* items, size_t count, uint32_t sampleMillis, String
   }
   LOGLN("Upload OK");
   return true;
+}
+
+// Try to locate the device id in a /api/devices response body by matching device key
+static long findDeviceIdByKey(const String &body, const String &devKey) {
+  String keyNeedle = String("\"key\":\"") + devKey + "\"";
+  int kp = body.indexOf(keyNeedle);
+  if (kp == -1) return -1;
+  // Prefer to search backward for id close to the key occurrence
+  int idPrev = body.lastIndexOf("\"id\":", kp);
+  if (idPrev != -1 && (kp - idPrev) < 400) {
+    int i = idPrev + 5; // after "id":
+    while (i < (int)body.length() && (body[i] == ' ')) i++;
+    int j = i;
+    while (j < (int)body.length() && isdigit((unsigned char)body[j])) j++;
+    if (j > i) {
+      return atol(body.substring(i, j).c_str());
+    }
+  }
+  // Otherwise, search forward
+  int idNext = body.indexOf("\"id\":", kp);
+  if (idNext != -1 && (idNext - kp) < 200) {
+    int i = idNext + 5;
+    while (i < (int)body.length() && (body[i] == ' ')) i++;
+    int j = i;
+    while (j < (int)body.length() && isdigit((unsigned char)body[j])) j++;
+    if (j > i) {
+      return atol(body.substring(i, j).c_str());
+    }
+  }
+  return -1;
+}
+
+bool updateFirmwareVersion(const char* version, String &err) {
+  err = String();
+  if (!version || !*version) { err = F("Empty version"); return false; }
+  if (!Provisioning::isConnected()) { err = F("WiFi not connected"); return false; }
+  if (!ensureConfigLoaded()) { err = F("BEEP config missing"); return false; }
+
+  if (!ensureLoggedIn(err)) { return false; }
+
+  // 1) Fetch devices for this account
+  String listUrl = (s_baseUrl.length() ? s_baseUrl : String(kDefaultBeepBaseUrl)) + "/api/devices";
+  String body; int code = 0;
+  if (!httpsGet(listUrl, body, code, s_apiToken)) {
+    err = F("HTTP error listing devices");
+    return false;
+  }
+  if (code < 200 || code >= 300) {
+    err = String(F("List devices failed: ")) + code;
+    return false;
+  }
+
+  long devId = findDeviceIdByKey(body, s_deviceKey);
+  if (devId <= 0) {
+    err = F("Device key not found");
+    return false;
+  }
+
+  // 2) Attempt to PATCH firmware version (try a few common field names)
+  String devUrl = (s_baseUrl.length() ? s_baseUrl : String(kDefaultBeepBaseUrl)) + "/api/devices/" + String(devId);
+  const char* fields[] = { "firmware_version", "fw_version", "firmware" };
+  for (size_t i = 0; i < sizeof(fields)/sizeof(fields[0]); ++i) {
+    String payload = String("{") + "\"" + fields[i] + "\":\"" + version + "\"}";
+    String rbody; int rcode = 0; String reqErr;
+    if (!sendJsonAuth("PATCH", devUrl, payload, rbody, rcode, reqErr)) {
+      // try next field name
+      continue;
+    }
+    if (rcode >= 200 && rcode < 300) {
+      LOGLN("Firmware version updated on BEEP");
+      return true;
+    }
+  }
+  err = F("Device update failed");
+  return false;
 }
 
 } // namespace BeepClient

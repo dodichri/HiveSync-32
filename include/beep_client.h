@@ -25,4 +25,9 @@ struct KV {
 // Returns true on success; 'err' filled on failure.
 bool uploadReadings(const KV* items, size_t count, uint32_t sampleMillis, String &err);
 
+// Update the device's firmware version on BEEP.nl (via /api/devices).
+// Uses credentials and device key from /config.json.
+// Returns true on success; 'err' filled on failure.
+bool updateFirmwareVersion(const char* version, String &err);
+
 } // namespace BeepClient

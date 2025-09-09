@@ -86,6 +86,18 @@ void setup() {
       Updater::loop();
       delay(50);
     }
+
+    // After OTA check (and possible reboot on update), report current firmware to BEEP
+    if (BeepClient::isConfigured()) {
+      UI::printLine(4, F("Updating BEEP firmware..."), ST77XX_YELLOW);
+      String err;
+      if (BeepClient::updateFirmwareVersion(Updater::currentVersion(), err)) {
+        UI::printLine(4, F("BEEP firmware updated"), ST77XX_GREEN);
+      } else {
+        UI::printLine(4, F("BEEP fw update failed"), ST77XX_RED);
+        LOGF("BEEP fw update error: %s\n", err.c_str());
+      }
+    }
   } else {
     if (!hadCreds) {
       // First-time provisioning: stay awake to allow BLE provisioning, then proceed
