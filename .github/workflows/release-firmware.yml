@@ -78,3 +78,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Commit and push version bump to release branch
+        env:
+          RELEASE_BRANCH: ${{ github.event.release.target_commitish }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- platformio.ini; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git add platformio.ini
+          git commit -m "chore: bump FIRMWARE_VERSION to ${VERSION}"
+          git push origin HEAD:${RELEASE_BRANCH}          
+
