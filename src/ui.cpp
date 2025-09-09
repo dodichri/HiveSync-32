@@ -221,4 +221,15 @@ static void drawBatteryTextOnly(int16_t, int16_t) {
   // Deprecated: retained for linkage but not used; drawing now handled in drawWifiIcon().
 }
 
+void powerDown() {
+  // Best-effort blanking then power rails off for low power
+  // Note: ST7789 retains contents; we turn off backlight to save power.
+  // Guard pins in case init() was not called.
+  pinMode(TFT_BACKLITE, OUTPUT);
+  digitalWrite(TFT_BACKLITE, LOW);
+  pinMode(TFT_I2C_POWER, OUTPUT);
+  digitalWrite(TFT_I2C_POWER, LOW);
+  LOGLN("Display/backlight powered down");
+}
+
 } // namespace UI
